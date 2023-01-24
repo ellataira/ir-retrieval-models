@@ -1,11 +1,13 @@
 import os
 import re
 
-from elasticsearch import Elasticsearch
+from elasticsearch7 import Elasticsearch
+# from elasticsearch.client import IndicesClient
 
 data = "/Users/ellataira/Desktop/cs4200/homework-1-ellataira/IR_data /AP_DATA/ap89_collection"
 
 AP89_INDEX = 'ap89_index'
+
 
 """
     regex syntax: 
@@ -19,9 +21,11 @@ TEXT_REGEX = re.compile("<TEXT>.*?</TEXT>", re.DOTALL)
 
 def main() :
 
-    es = Elasticsearch("https://localhost:9200")
+    es = Elasticsearch("http://localhost:9200")
 
-    es.indices.create(index=AP89_INDEX, body={
+    es.info()
+
+    request_body={
         "settings": {
             "analysis": {
                 "analyzer": {
@@ -44,7 +48,9 @@ def main() :
             }
         }
     }
-    )
+
+    response = es.indices.create(index=AP89_INDEX, body=request_body)
+    print(response)
 
     open(es)
 
@@ -52,7 +58,7 @@ def main() :
 """opens file collection and delegates to parse individual files """
 def open(es) :
 
-    entries = os.listdir(data)
+    entries = os.listdir(data) ##TODO FIX THISJKDKLFJKLAJDFKL
     id = 0
 
     # for every 'ap....' file in the opened directory, parse it for documents
