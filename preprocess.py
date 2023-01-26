@@ -27,13 +27,15 @@ def main() :
 
     request_body={
         "settings": {
+            "number_of_shards": 1,
+            "number_of_replicas": 1,
             "analysis": {
                 "analyzer": {
                     "my_analyzer": {
                         "tokenizer": "whitespace",
                         "filter": [
                             "lowercase",
-                            "porter_stem",  ## TODO: should i use stem-classes.txt for a custom stemmer instead?
+                            "porter_stem",
                             "custom_stop_filter"
                         ]
                     }
@@ -44,6 +46,16 @@ def main() :
                         "ignore_case": True,
                         "stopwords": "IR_data /AP_DATA/stoplist.txt"
                     }
+                }
+            }
+        },
+        "mappings": {
+            "properties": {
+                "content": {
+                    "type": "text",
+                    "fielddata": True,
+                    "analyzer": "my_analyzer",
+                    "index_options": "positions"
                 }
             }
         }
@@ -60,14 +72,16 @@ def main() :
 """opens file collection and delegates to parse individual files """
 def open_dir(es) :
 
-    entries = os.listdir(data) ##TODO FIX THISJKDKLFJKLAJDFKL
+    entries = os.listdir(data)
     id = 0
 
+    print(id)
     # for every 'ap....' file in the opened directory, parse it for documents
     for entry in entries:
         if 'ap' in entry: ## excludes the readme file
             filepath = data + "/" + entry
             id = parse(filepath, id, es)
+            print("parsed: "+ filepath + "\n")
 
 
 
@@ -79,27 +93,26 @@ def parse(filepath, id, es):
         read_opened = opened.read()
         found_docs = re.findall(DOC_REGEX, read_opened)
 
+        print(id)
         for doc in found_docs:
             id +=1
 
-            docno = ""
-            text = ""
+            found_doc = re.search(DOCNO_REGEX, doc)
+            docno = re.sub("(<DOCNO> )|( </DOCNO>)", "", found_doc[0])
 
-            find_docno = re.search(DOCNO_REGEX, doc)
-            if find_docno:
-                docno = re.sub(DOCNO_REGEX, "", str(find_docno))  ##TODO: getting warning bc re.search returns String or None, and re.sub doesnt support None
-                docno.strip()
-
-            find_text = re.search(TEXT_REGEX, doc)
-            if find_text:
-                text = re.sub(TEXT_REGEX, "", str(find_text))
+            found_text = re.search(TEXT_REGEX, doc)
+            text = re.sub("(<TEXT>\n)|(\n</TEXT>)", "", found_text[0])
+            text = re.sub("\n", " ", text)
 
             parsed_doc =  {
-                'DOCNO': docno,
-                'TEXT': text
+                'text': text
             }
 
-            es.index(index=AP89_INDEX, id=id, body=parsed_doc)
+            es.index(index=AP89_INDEX, id=docno, body=parsed_doc)
+
+        print("doc index: " + str(id))
+        return id
+
 
 if __name__ == '__main__':
     main()
