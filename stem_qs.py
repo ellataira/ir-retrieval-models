@@ -1,12 +1,13 @@
 import re
+from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 from nltk.tokenize import word_tokenize
 import sys
+import string
 
 data = "/Users/ellataira/Desktop/cs4200/homework-1-ellataira/IR_data /AP_DATA/query_desc.51-100.short.txt"
 
 QS_INDEX = 'query_index'
-STOPS = '/Users/ellataira/Desktop/cs4200/homework-1-ellataira/IR_data /AP_DATA/stoplist.txt'
 
 # indexes, stems, and tokenizes queries in the same format as documents to determine how to reduce
 # queries to minimal key words
@@ -18,6 +19,7 @@ def main() :
 
         stemmer = PorterStemmer()
         lines = opened.readlines()
+        stop_words = set(stopwords.words('english'))
 
         for line in lines:
             result = " "
@@ -29,7 +31,7 @@ def main() :
             tokens = word_tokenize(text)
 
             for t in tokens:
-                if t not in STOPS:
+                if t not in stop_words and t not in string.punctuation:
                     result += " " + stemmer.stem(t)
 
             print(result)
