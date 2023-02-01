@@ -1,13 +1,22 @@
 import math
+import os
+import pickle
 import re
 import sys
 from nltk.stem.porter import *
+import preprocess
 
 from elasticsearch7 import Elasticsearch
 
-es = Elasticsearch("http://localhost:9200", timeout=60)
+es = Elasticsearch("http://localhost:9200", timeout=200)
 AP89_INDEX = 'ap89_index'
 q_data = "/Users/ellataira/Desktop/cs4200/homework-1-ellataira/IR_data /AP_DATA/query_desc.51-100.short.txt"
+
+VOCAB_SIZE = 288141
+
+infile = open('/Users/ellataira/Desktop/cs4200/homework-1-ellataira/IR_data /AP_DATA/doc_lens_dict.pkl', 'rb')
+DOC_LENS = pickle.load(infile)
+infile.close()
 
 ######################## PROCESS QUERIES ##################################################################
 
@@ -133,20 +142,23 @@ def get_word_in_query_frequency(term, query):
             count += 1
     return count
 
-# def get_avg_doc_length(tv):
-#     num_docs = tv['term_vectors']['text']['field_statistics']['doc_count']
-#     sum_ttf = tv['term_vectors']['text']['field_statistics']['sum_ttf']
-#     return float(sum_ttf) / num_docs
+def get_avg_doc_length(tv):
+    num_docs = tv['term_vectors']['text']['field_statistics']['doc_count']
+    sum_ttf = tv['term_vectors']['text']['field_statistics']['sum_ttf']
+    return float(sum_ttf) / num_docs
 
 # @param term vector corresponding to docid
-def get_doc_length_and_avg(d_id,term):
-    exp = es.explain(index=AP89_INDEX, id=d_id, body={
-        "query":{
-            "term": {"text": term}
-        }})
-    dl = exp['explanation']['details'][0]['details'][2]['details'][3]['value']
-    adl = exp['explanation']['details'][0]['details'][2]['details'][4]['value']
-    return dl, adl
+def get_doc_length(d_id, term):
+    # exp = es.explain(index=AP89_INDEX, id=d_id, body={
+    #     "query":{
+    #         "term": {"text": term}
+    #     }})
+    # try:
+    #     dl = exp['explanation']['details'][0]['details'][2]['details'][3]['value']
+    # except: #TODO: BUT WHAT IF THE TERM ISNT IN THE DOC??! BC IT SETS DL=1
+    #     dl = 1
+    # return dl
+    return DOC_LENS[d_id]
 
 # find term frequency in all documents in corpus
 def get_doc_frequency_of_word(tv, term):
@@ -158,20 +170,37 @@ def get_doc_frequency_of_word(tv, term):
     return df
 
 def get_vocab_size():
-    return 0
+    # vocab = es.search(index=AP89_INDEX, body={
+    #     "aggs": {
+    #         "vocab": {
+    #             "cardinality": {
+    #                 "field": "text"
+    #             }
+    #         }
+    #     },
+    #     "size": 0
+    # })
+    # return vocab['aggregations']['vocab']['value']
+    return VOCAB_SIZE
+
 
 ######################### OUTPUT  RESULTS / SORT #########################################################
 # sorts documents in descending order, so the doc with the highest score is first (most relevant)
-def sort_descending(relevant_docs):
+# and truncates at k docs
+def sort_descending(relevant_docs, k):
     sorted_docs = sorted(relevant_docs.items(), reverse=True)
+    del sorted_docs[k:]
     return sorted_docs
-
 
 # outputs search results to a file
 # uses fields specific to ES builtin search
 # the ES builtin search already sorts the hits in decresing order, so there is no need to reorder before saving
 def save_to_file_for_es_builtin(relevant_docs, doc_name):
-    f = '/Users/ellataira/Desktop/cs4200/homework-1-ellataira/IR_data /AP_DATA/' + doc_name + '.txt'
+    f = '/Users/ellataira/Desktop/cs4200/homework-1-ellataira/IR_data /scores' + doc_name + '.txt'
+
+    if os.path.exists(f):
+        os.remove(f)
+
     with open(f, 'w') as f:
         for query_id, docs in relevant_docs.items():
             count = 1
@@ -179,10 +208,24 @@ def save_to_file_for_es_builtin(relevant_docs, doc_name):
                 f.write(str(query_id) + ' Q0 ' + str(d['_id']) + ' ' + str(count) + ' ' + str(d['_score']) + ' Exp\n')
                 count += 1
 
-def save_to_file(relevant_docs):
-    return 0
-    # sort
-    # print to file
+    f.close()
+
+def save_to_file(relevant_docs, filename):
+    f = '/Users/ellataira/Desktop/cs4200/homework-1-ellataira/IR_data /scores' + filename + '.txt'
+    k = 1000 # want to save the top 1000 files
+
+    if os.path.exists(f):
+        os.remove(f)
+
+    with open(f, 'w') as f:
+        for query_id, results_dict in relevant_docs.items():
+            sorted_dict = sort_descending(results_dict, k)
+            count = 1
+            for d_id, score in sorted_dict.items():
+                f.write(str(query_id) + ' Q0 ' + str(d_id) + ' ' + str(count) + ' ' + str(score) + ' Exp\n')
+                count+=1
+
+    f.close()
 
 ######################## ES BUILT-IN  ##################################################################
 
@@ -261,10 +304,11 @@ def score():
         for tv in tv['docs']:
             d_id = tv['_id']
             for term in query:
-                print("term: " + t)
+                print(term)
                 tf_wd = get_word_in_doc_frequency(term, tv)
                 tf_wq = get_word_in_query_frequency(term, query)
-                dl, adl = get_doc_length_and_avg(d_id, term)
+                dl = get_doc_length(d_id, term)
+                adl = get_avg_doc_length(tv)
                 df_w = get_doc_frequency_of_word(tv, term)
                 v = get_vocab_size()
                 ttf = get_ttf(term, tv)
@@ -291,24 +335,23 @@ def score():
 
     # once completed ranking for every query, export results
 
-    save_to_file_for_es_builtin(es_builtin)
-    save_to_file(okapi_scores)
-    save_to_file(tf_idf_scores)
-    save_to_file(okapi_bm25_scores)
-    save_to_file(uni_lm_laplace_scores)
-    save_to_file(uni_lm_jm_scores)
-
+    save_to_file_for_es_builtin(es_builtin, "es_builtin")
+    save_to_file(okapi_scores, "okapi_tf")
+    save_to_file(tf_idf_scores, "tf_idf")
+    save_to_file(okapi_bm25_scores, "okapi_bm25")
+    save_to_file(uni_lm_laplace_scores, "uni_lm_laplace")
+    save_to_file(uni_lm_jm_scores, "uni_lm_jm")
 
 
 
 queries = process_all_queries(q_data)
-print(queries)
-# es_builtin = ES_Search(queries)
-# save_to_file_for_es_builtin(es_builtin, "es_builtin")
+# print(queries)
+# # es_builtin = ES_Search(queries)
+# # save_to_file_for_es_builtin(es_builtin, "es_builtin")
 c=0
 for id, q in queries.items():
     if c < 4:
-         print(q) #TODO fix query processing!! why is is 85? -- not removing query no. when parsing
+         print(q)
          doc_ids= query_search(q)
          tvs = term_vectors(doc_ids)
          for t in q:
@@ -318,6 +361,9 @@ for id, q in queries.items():
                 print(str(tv) + "\n")
                 print("term: " + t)
                 print("Word in doc: " + str(get_word_in_doc_frequency(t, tv)))
-                print("get dl, and avg doc length: " + str(get_doc_length_and_avg(tv["_id"], t)))
+                print("get dl: " + str(get_doc_length(tv["_id"], t)))
+                print("avg doc length: " +  str(get_avg_doc_length(tv)))
+                print("vocab size: " + str(get_vocab_size()))
          c+=1
-    print(q)
+#     print(q)
+

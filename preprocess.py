@@ -1,5 +1,6 @@
 import os
 import re
+import pickle
 
 from elasticsearch7 import Elasticsearch
 from nltk import PorterStemmer, word_tokenize
@@ -19,6 +20,12 @@ DOC_REGEX = re.compile("<DOC>.*?</DOC>", re.DOTALL) ## DOTALL allows '.' to equa
 DOCNO_REGEX = re.compile("<DOCNO>.*?</DOCNO>")
 TEXT_REGEX = re.compile("<TEXT>.*?</TEXT>", re.DOTALL)
 
+# for use in model calculations which require vocab_size
+VOCAB_SIZE = 0
+VOCAB = []
+# for use in the model calculations which require document_length
+DOC_LENS = {}
+
 def main() :
 
     stops = read_stop_words("/Users/ellataira/Desktop/cs4200/homework-1-ellataira/IR_data /AP_DATA/stoplist.txt")
@@ -27,7 +34,7 @@ def main() :
     stemmer = PorterStemmer()
 
     # delete previously made index if it already exists
-    es.indices.delete(index=AP89_INDEX, ignore=[404, 400])
+    # es.indices.delete(index=AP89_INDEX, ignore=[404, 400])
 
     request_body={
         "settings": {
@@ -65,10 +72,17 @@ def main() :
         }
     }
 
-    response = es.indices.create(index=AP89_INDEX, body=request_body)
-    print(response)
+    # response = es.indices.create(index=AP89_INDEX, body=request_body)
+    # print(response)
 
-    open_dir(es,stemmer, stops)
+    open_dir(es, stemmer, stops)
+
+    VOCAB_SIZE = len(VOCAB)
+    print(VOCAB_SIZE)
+
+    p = open('/Users/ellataira/Desktop/cs4200/homework-1-ellataira/IR_data /AP_DATA/doc_lens_dict.pkl','wb')
+    pickle.dump(DOC_LENS, p)
+    p.close()
 
     print("completed indexing!")
 
@@ -113,6 +127,11 @@ def parse(filepath, id, es, stemmer, stops):
             for t in tokens:
                 if t not in stops:
                     res.append(stemmer.stem(t))
+                if t not in VOCAB:
+                    VOCAB.append(t)
+
+            # add stemmed, stop-word-removed text length to list of doc lengths
+            DOC_LENS[docno] = len(res)
 
             text = " ".join(res)
 
@@ -120,7 +139,7 @@ def parse(filepath, id, es, stemmer, stops):
                 'text': text
             }
 
-            es.index(index=AP89_INDEX, id=docno, body=parsed_doc)
+            # es.index(index=AP89_INDEX, id=docno, body=parsed_doc)
 
         print("doc index: " + str(id))
         return id
