@@ -2,6 +2,7 @@ import os
 import re
 
 from elasticsearch7 import Elasticsearch
+from nltk import PorterStemmer, word_tokenize
 
 data = "/Users/ellataira/Desktop/cs4200/homework-1-ellataira/IR_data /AP_DATA/ap89_collection"
 
@@ -20,7 +21,10 @@ TEXT_REGEX = re.compile("<TEXT>.*?</TEXT>", re.DOTALL)
 
 def main() :
 
+    stops = read_stop_words("/Users/ellataira/Desktop/cs4200/homework-1-ellataira/IR_data /AP_DATA/stoplist.txt")
+
     es = Elasticsearch("http://localhost:9200")
+    stemmer = PorterStemmer()
 
     # delete previously made index if it already exists
     es.indices.delete(index=AP89_INDEX, ignore=[404, 400])
@@ -30,21 +34,21 @@ def main() :
             "number_of_shards": 1,
             "number_of_replicas": 1,
             "analysis": {
-                "analyzer": {
-                    "my_analyzer": {
-                        "tokenizer": "whitespace",
-                        "filter": [
-                            "lowercase",
-                            "porter_stem",
-                            "custom_stop_filter"
-                        ]
+                "filter": {
+                    "english_stop": {
+                        "type": "stop",
+                        "stopwords": stops
                     }
                 },
-                "filter": {
-                    "custom_stop_filter": {
-                        "type": "stop",
-                        "ignore_case": True,
-                        "stopwords": "IR_data /AP_DATA/stoplist.txt"
+                "analyzer": {
+                    "stopped": {
+                        "type": "custom",
+                        "tokenizer": "standard",
+                        "filter": [
+                            "lowercase",
+                            "english_stop",
+                            "porter_stem"
+                        ]
                     }
                 }
             }
@@ -54,7 +58,7 @@ def main() :
                 "content": {
                     "type": "text",
                     "fielddata": True,
-                    "analyzer": "my_analyzer",
+                    "analyzer": "stopped",
                     "index_options": "positions"
                 }
             }
@@ -64,13 +68,13 @@ def main() :
     response = es.indices.create(index=AP89_INDEX, body=request_body)
     print(response)
 
-    open_dir(es)
+    open_dir(es,stemmer, stops)
 
     print("completed indexing!")
 
 
 """opens file collection and delegates to parse individual files """
-def open_dir(es) :
+def open_dir(es, stemmer, stops) :
 
     entries = os.listdir(data)
     id = 0
@@ -80,13 +84,13 @@ def open_dir(es) :
     for entry in entries:
         if 'ap' in entry: ## excludes the readme file
             filepath = data + "/" + entry
-            id = parse(filepath, id, es)
+            id = parse(filepath, id, es, stemmer, stops)
             print("parsed: "+ filepath + "\n")
 
 
 
 """parses an individual file from the collection for documents / info """
-def parse(filepath, id, es):
+def parse(filepath, id, es, stemmer, stops):
 
     with open(filepath, encoding="ISO-8859-1") as opened:
 
@@ -104,6 +108,14 @@ def parse(filepath, id, es):
             text = re.sub("(<TEXT>\n)|(\n</TEXT>)", "", found_text[0])
             text = re.sub("\n", " ", text)
 
+            tokens = word_tokenize(text)
+            res = []
+            for t in tokens:
+                if t not in stops:
+                    res.append(stemmer.stem(t))
+
+            text = " ".join(res)
+
             parsed_doc =  {
                 'text': text
             }
@@ -113,6 +125,12 @@ def parse(filepath, id, es):
         print("doc index: " + str(id))
         return id
 
+def read_stop_words(filename):
+    lines = []
+    with open(filename, 'r') as f:
+        for line in f:
+            lines.append(line.strip())
+    return lines
 
 if __name__ == '__main__':
     main()
