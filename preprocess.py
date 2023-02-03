@@ -9,7 +9,6 @@ data = "/Users/ellataira/Desktop/cs4200/homework-1-ellataira/IR_data /AP_DATA/ap
 
 AP89_INDEX = 'ap89_index'
 
-
 """
     regex syntax: 
     '.' operator == matches any character 
@@ -34,7 +33,7 @@ def main() :
     stemmer = PorterStemmer()
 
     # delete previously made index if it already exists
-    # es.indices.delete(index=AP89_INDEX, ignore=[404, 400])
+    es.indices.delete(index=AP89_INDEX, ignore=[404, 400])
 
     request_body={
         "settings": {
@@ -72,8 +71,8 @@ def main() :
         }
     }
 
-    # response = es.indices.create(index=AP89_INDEX, body=request_body)
-    # print(response)
+    response = es.indices.create(index=AP89_INDEX, body=request_body)
+    print(response)
 
     open_dir(es, stemmer, stops)
 
@@ -139,7 +138,7 @@ def parse(filepath, id, es, stemmer, stops):
                 'text': text
             }
 
-            # es.index(index=AP89_INDEX, id=docno, body=parsed_doc)
+            es.index(index=AP89_INDEX, id=docno, body=parsed_doc)
 
         print("doc index: " + str(id))
         return id
@@ -151,5 +150,7 @@ def read_stop_words(filename):
             lines.append(line.strip())
     return lines
 
+
 if __name__ == '__main__':
-    main()
+    pass
+    # main()
