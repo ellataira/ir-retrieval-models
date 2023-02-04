@@ -8,13 +8,14 @@ from elasticsearch7 import Elasticsearch
 
 es = Elasticsearch("http://localhost:9200", timeout=900000000)
 AP89_INDEX = 'ap89_index'
-q_data = "/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data /AP_DATA/query_desc.51-100.short.txt"
+q_data = "/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data/AP_DATA/query_desc.51-100.short.txt"
+# q_data = "/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data/AP_DATA/test_qs_short.txt"
 
 VOCAB_SIZE = 288141
 TOTAL_DOCS = 84678
 SIZE = 1000
 
-infile = open('/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data /AP_DATA/doc_lens_dict.pkl', 'rb')
+infile = open('/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data/AP_DATA/doc_lens_dict.pkl', 'rb')
 DOC_LENS = pickle.load(infile)
 infile.close()
 
@@ -60,7 +61,7 @@ def query_search(query):
     res = es.search(
         index=AP89_INDEX,
         body={
-            "size": SIZE,
+            "size": 10000,
             "query": {
                 "match": {"text": " ".join(query)}  # convert query array back into string
             }
@@ -114,12 +115,11 @@ def get_term_vector(d_id):
 
 # returns term frequency value of given term in the index
 def get_ttf(term, tv):
-    tf = 1
     try:
-        tf = tv['term_vectors']['text']['terms'][term]['ttf']
+        ttf = tv['term_vectors']['text']['terms'][term]['ttf']
     except KeyError:
-        print("key does not exist in the document: " + term)
-    return tf
+        ttf = 10000
+    return ttf
 
 
 # returns term frequency of given term in a document
@@ -127,11 +127,10 @@ def get_ttf(term, tv):
 # @param term
 # @return the frequency of given term in tv
 def get_word_in_doc_frequency(term, tv):
-    tf = 1
     try:
         tf = tv['term_vectors']['text']['terms'][term]['term_freq']
     except KeyError:
-        print("key does not exist in the document: " + term)
+        tf = 0
     return tf
 
 
@@ -140,7 +139,7 @@ def get_word_in_query_frequency(term, query):
     stemmer = PorterStemmer()
     count = 0
     for s in query:
-        if stemmer.stem(s) == stemmer.stem(term):
+        if s == stemmer.stem(term):
             count += 1
     return count
 
@@ -155,27 +154,24 @@ def get_avg_doc_length(tv):
 # returns the length (number of words) in a specified document
 # @param term vector corresponding to docid
 def get_doc_length(d_id, term):
-    # exp = es.explain(index=AP89_INDEX, id=d_id, body={
-    #     "query":{
-    #         "term": {"text": term}
-    #     }})
-    # try:
-    #     dl = exp['explanation']['details'][0]['details'][2]['details'][3]['value']
-    # except: #TODO: BUT WHAT IF THE TERM ISNT IN THE DOC??! BC IT SETS DL=1
-    #     dl = 1
-    # return dl
-
-    # document lengths was stored in a pickle during initial indexing
-    return DOC_LENS[d_id]
+    exp = es.explain(index=AP89_INDEX, id=d_id, body={
+        "query":{
+            "term": {"text": term}
+        }})
+    try:
+        dl = exp['explanation']['details'][0]['details'][2]['details'][3]['value']
+    except:
+        dl = 10000
+    return dl
+    # return DOC_LENS[d_id]
 
 
 # find term frequency in all documents in corpus
 def get_doc_frequency_of_word(tv, term):
-    df = 1
     try:
         df = tv['term_vectors']['text']['terms'][term]['doc_freq']
     except:
-        print("key does not exist in the corpus: " + term)
+        df = 1
     return df
 
 
@@ -215,7 +211,7 @@ def sort_descending(relevant_docs, k):
 # uses fields specific to ES builtin search
 # the ES builtin search already sorts the hits in decresing order, so there is no need to reorder before saving
 def save_to_file_for_es_builtin(relevant_docs, doc_name):
-    f = '/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data /scores/' + doc_name + '.txt'
+    f = '/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data/scores/' + doc_name + '2.txt'
 
     if os.path.exists(f):
         os.remove(f)
@@ -232,7 +228,7 @@ def save_to_file_for_es_builtin(relevant_docs, doc_name):
 # saves a list of scored docs to a .txt file
 # @param 2-d dictionary of scored documents [query][documents]
 def save_to_file(relevant_docs, filename):
-    f = '/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data /scores/' + filename + '.txt'
+    f = '/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data/scores/' + filename + '2.txt'
     k = SIZE  # want to save the top 1000 files
 
     if os.path.exists(f):
@@ -273,7 +269,7 @@ def es_search(queries):
 
 # calculates okapi tf score of a single document
 def okapi_tf(tf_wd, dl, adl):
-    score = tf_wd / (tf_wd + 0.5 + 1.5 * (dl / adl))
+    score = tf_wd / (tf_wd + 0.5 + (1.5 * (dl / adl)))
     return score
 
 
@@ -291,7 +287,7 @@ def tf_idf(okapi_score, d, df_w):
 def okapi_bm25(tf_wq, tf_wd, df_w, adl, dl, d):
     b = 0.75
     k1 = 1.2
-    k2 = 500  # k2 param is typically 0 <= k2 <= 1000
+    k2 = 100  # k2 param is typically 0 <= k2 <= 1000
     log = math.log((d + 0.5) / (df_w + 0.5))
     a = (tf_wd + k1 * tf_wd) / (tf_wd + k1 * ((1 - b) + b * (dl / adl)))
     b = (tf_wq + k2 * tf_wq) / (tf_wq + k2)
@@ -305,38 +301,49 @@ def uni_lm_laplace(tf_wd, dl, v):
     p_laplace = (tf_wd + 1) / (dl + v)
     return math.log(p_laplace)
 
+# make doc length big if not exist -- log of a larger number is greater , so want bigger frac denom
+
+# tf=0 (not present), dl=100, v= 1000
+# lp = -3.04
+
+# tf=0 (not present), dl=1, v= 1000
+# lp = -3.00
+
+# want a more negative number if the term is not present, so set DL to a large number
 
 ######################## Unigram LM with Jelinek-Mercer smoothing #########################################
 
 # calculates Unigram LM with Jelinek-Mercer smoothing score of a single document
 def uni_lm_jm(tf_wd, dl, ttf, v):
-    l = 0.7  # a high lambda value prefers docs containing all query words; a low lambda is better for longer queries
-    p_jm = l*(tf_wd / dl) + (1 - l)*(ttf / v)
+    l = 0.9  # a high lambda value prefers docs containing all query words; a low lambda is better for longer queries
+    p_jm = l * (tf_wd / dl) + (1 - l) * (ttf / v)
     return math.log(p_jm)
 
+# tf=0 (not present), dl=100, v= 1000, ttf=1
+# jm = -4
+
+# tf=0 (not present), dl=1, v= 1000, ttf=1
+# tf = -4
+# THE DL WILL BE CANCELLED OUT IF TF = 0 , so it doesn't matter what it is set to
+
+# tf=0 (not present), dl=1, v= 1000, ttf=20000
+# jm = 0.301
+
+# tf=0 (not present), dl=1, v= 1000, ttf=10
+# jm = -3
+
+# want a more negative number if the term is not present, so set TTF to a large number. we don't care about DL, bc it
+# will be cancelled out by TF=0
 
 ##########################################################################################################
 
-# runs all ranking models and saves their outputs to txt files
-# processes queries, searches for relevant documents, and then scores those documents using the
-# different ranking models
-def run_all_models():
-    # process, stem, remove stop words from queries
-    queries = process_all_queries(q_data)
-    print(queries)
-
+# method that calls all vector ranking models
+# will increment a document score only if the term is in the current document
+def Vector_Prob_Models(queries):
     # initialize scores dictionaries
     okapi_scores = {}
     tf_idf_scores = {}
     okapi_bm25_scores = {}
-    uni_lm_laplace_scores = {}
-    uni_lm_jm_scores = {}
-
-
-    ## execute ES builtin:
-    es_builtin_scores = es_search(queries)
-
-    ## execute ranking models
 
     # for each query,
     for id, query in queries.items():
@@ -348,8 +355,6 @@ def run_all_models():
         okapi_scores[q_id] = {}
         tf_idf_scores[q_id] = {}
         okapi_bm25_scores[q_id] = {}
-        uni_lm_laplace_scores[q_id] = {}
-        uni_lm_jm_scores[q_id] = {}
 
         # get relevant documents for the query
         doc_ids = query_search(query)
@@ -362,62 +367,98 @@ def run_all_models():
 
             # for each term in query,
             for term in query:
-                # print("term: " + term)
-                tf_wq = get_word_in_query_frequency(term, query)
-                # for each relevant document and term combo , calculate and increment total query score
-
                 d_id = tv['_id']
-                # print("d_id: " + str(d_id))
+
+                # only calculate score if the term is in the document
+                if term in tv["term_vectors"]["text"]["terms"].keys():
+                    tf_wq = get_word_in_query_frequency(term, query)
+                    tf_wd = get_word_in_doc_frequency(term, tv)
+                    dl = get_doc_length(d_id, term)
+                    adl = get_avg_doc_length(tv)
+                    df_w = get_doc_frequency_of_word(tv, term)
+
+                    # okapi-tf
+                    okapi_score = okapi_tf(tf_wd, dl, adl)
+                    try:
+                        okapi_scores[q_id][d_id] += okapi_score
+                    except (KeyError):
+                        okapi_scores[q_id][d_id] = okapi_score
+
+                    # TF-IDF
+                    tf_idf_score = tf_idf(okapi_score, d, df_w)
+                    try:
+                        tf_idf_scores[q_id][d_id] += tf_idf_score
+                    except (KeyError):
+                        tf_idf_scores[q_id][d_id] = tf_idf_score
+
+                    # Okapi BM25
+                    okapi_bm25_score = okapi_bm25(tf_wq, tf_wd, df_w, adl, dl, d)
+                    try:
+                        okapi_bm25_scores[q_id][d_id] += okapi_bm25_score
+                    except (KeyError):
+                        okapi_bm25_scores[q_id][d_id] = okapi_bm25_score
+
+    return okapi_scores, tf_idf_scores, okapi_bm25_scores
+
+def Unigram_Models(queries):
+    # initialize scores dictionaries
+    laplace_scores = {}
+    jm_scores = {}
+
+    # for each query,
+    for id, query in queries.items():
+        q_id = id
+        print("q_id: " + str(q_id))
+        print("query: " + str(query))
+
+        # for each query, instaniate its index in 2-d solution array
+        laplace_scores[q_id] = {}
+        jm_scores[q_id] = {}
+
+        # get relevant documents for the query
+        doc_ids = query_search(query)
+
+        d = get_total_docs()
+        v = get_vocab_size()
+
+        for d_id in doc_ids:
+            tv = get_term_vector(d_id)
+
+            # for each term in query,
+            for term in query:
+                d_id = tv['_id']
+
                 tf_wd = get_word_in_doc_frequency(term, tv)
                 dl = get_doc_length(d_id, term)
-                adl = get_avg_doc_length(tv)
-                df_w = get_doc_frequency_of_word(tv, term)
                 ttf = get_ttf(term, tv)
 
-                ## OkapiTF
-                okapi_score = okapi_tf(tf_wd, dl, adl)
-                # print(okapi_score)
-                try:
-                    okapi_scores[q_id][d_id] += okapi_score
-                except (KeyError):
-                    okapi_scores[q_id][d_id] = okapi_score
-
-                ## TF-IDF
-                tf_idf_score = tf_idf(okapi_score, d, df_w)
-                # print(tf_idf_score)
-                try:
-                    tf_idf_scores[q_id][d_id] += tf_idf_score
-                except (KeyError):
-                    tf_idf_scores[q_id][d_id] = tf_idf_score
-
-                # Okapi BM25
-                okapi_bm25_score = okapi_bm25(tf_wq, tf_wd, df_w, adl, dl, d)
-                # print(okapi_bm25_score)
-                try:
-                    okapi_bm25_scores[q_id][d_id] += okapi_bm25_score
-                except (KeyError):
-                    okapi_bm25_scores[q_id][d_id] = okapi_bm25_score
-
-                # Unigram LM with Laplace smoothing
+                # if the term is not present in document, then tf_wd = 0
                 uni_lm_laplace_score = uni_lm_laplace(tf_wd, dl, v)
-                # print(uni_lm_laplace_score)
                 try:
-                    uni_lm_laplace_scores[q_id][d_id] += uni_lm_laplace_score
+                    laplace_scores[q_id][d_id] += uni_lm_laplace_score
                 except (KeyError):
-                    uni_lm_laplace_scores[q_id][d_id] = uni_lm_laplace_score
+                    laplace_scores[q_id][d_id] = uni_lm_laplace_score
 
                 # Unigram LM with Jelinek-Mercer smoothing
                 uni_lm_jm_score = uni_lm_jm(tf_wd, dl, ttf, v)
-                # print(uni_lm_jm_score)
                 try:
-                    uni_lm_jm_scores[q_id][d_id] += uni_lm_jm_score
+                    jm_scores[q_id][d_id] += uni_lm_jm_score
                 except (KeyError):
-                    uni_lm_jm_scores[q_id][d_id] = uni_lm_jm_score
+                    jm_scores[q_id][d_id] = uni_lm_jm_score
 
-    # once completed ranking for every query, export results
+    return laplace_scores, jm_scores
 
-    save_to_file_for_es_builtin(es_builtin_scores, "es_builtin")
-    print("saved built in scores")
+
+# runs all ranking models and saves their outputs to txt files
+# processes queries, searches for relevant documents, and then scores those documents using the
+# different ranking models
+def run_all_models():
+    # process, stem, remove stop words from queries
+    queries = process_all_queries(q_data)
+    print(queries)
+
+    # vector / prob models
+    okapi_scores, tf_idf_scores, okapi_bm25_scores = Vector_Prob_Models(queries)
 
     save_to_file(okapi_scores, "okapi_tf")
     print("saved okapi scores")
@@ -427,6 +468,16 @@ def run_all_models():
 
     save_to_file(okapi_bm25_scores, "okapi_bm25")
     print("saved okapi bm25 scores")
+
+    ## ES builtin:
+    es_builtin_scores = es_search(queries)
+
+    save_to_file_for_es_builtin(es_builtin_scores, "es_builtin")
+    print("saved built in scores")
+
+    # language models
+
+    uni_lm_laplace_scores, uni_lm_jm_scores = Unigram_Models(queries)
 
     save_to_file(uni_lm_laplace_scores, "uni_lm_laplace")
     print("saved uni lm laplace scores")
