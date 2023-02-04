@@ -5,7 +5,7 @@ import pickle
 from elasticsearch7 import Elasticsearch
 from nltk import PorterStemmer, word_tokenize
 
-data = "/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data /AP_DATA/ap89_collection"
+data = "/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data/AP_DATA/ap89_collection"
 
 AP89_INDEX = 'ap89_index'
 
@@ -27,7 +27,7 @@ DOC_LENS = {}
 
 def main() :
 
-    stops = read_stop_words("/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data /AP_DATA/stoplist.txt")
+    stops = read_stop_words("/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data/AP_DATA/stoplist.txt")
 
     es = Elasticsearch("http://localhost:9200")
     stemmer = PorterStemmer()
@@ -79,7 +79,7 @@ def main() :
     VOCAB_SIZE = len(VOCAB)
     print(VOCAB_SIZE)
 
-    p = open('/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data /AP_DATA/doc_lens_dict.pkl','wb')
+    p = open('/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data/AP_DATA/doc_lens_dict.pkl','wb')
     pickle.dump(DOC_LENS, p)
     p.close()
 
