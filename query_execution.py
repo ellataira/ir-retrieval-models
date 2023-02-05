@@ -8,8 +8,7 @@ from elasticsearch7 import Elasticsearch
 
 es = Elasticsearch("http://localhost:9200", timeout=900000000)
 AP89_INDEX = 'ap89_index'
-q_data = "/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data/AP_DATA/query_desc.51-100.short.txt"
-# q_data = "/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data/AP_DATA/test_qs_short.txt"
+q_data = "/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data/AP_DATA/new_queries.txt"
 
 VOCAB_SIZE = 288141
 TOTAL_DOCS = 84678
@@ -86,25 +85,6 @@ def query_search(query):
 
     return relevant_doc_ids
 
-
-# gets term vectors for all documents in index TODO delete this? not using mtermvectors anymore bc space
-def term_vectors(doc_ids):
-    body = {
-        "ids": doc_ids,
-        "parameters": {
-            "fields": [
-                'text'
-            ],
-            "term_statistics": True,
-            "offsets": True,
-            "payloads": True,
-            "positions": True,
-            "field_statistics": True
-        }
-    }
-    term_vectors = es.mtermvectors(index=AP89_INDEX, body=body)
-    return term_vectors
-
 # get a term vectors corresponding to a given document ID
 def get_term_vector(d_id):
     term_vector = es.termvectors(index=AP89_INDEX, id=d_id, fields='text',
@@ -118,7 +98,7 @@ def get_ttf(term, tv):
     try:
         ttf = tv['term_vectors']['text']['terms'][term]['ttf']
     except KeyError:
-        ttf = 10000
+        ttf = 100
     return ttf
 
 
@@ -161,9 +141,8 @@ def get_doc_length(d_id, term):
     try:
         dl = exp['explanation']['details'][0]['details'][2]['details'][3]['value']
     except:
-        dl = 10000
+        dl = 100
     return dl
-    # return DOC_LENS[d_id]
 
 
 # find term frequency in all documents in corpus
@@ -178,17 +157,6 @@ def get_doc_frequency_of_word(tv, term):
 # returns the vocab size of the entire corpus
 # i.e. the number of unique terms
 def get_vocab_size():
-    # vocab = es.search(index=AP89_INDEX, body={
-    #     "aggs": {
-    #         "vocab": {
-    #             "cardinality": {
-    #                 "field": "text"
-    #             }
-    #         }
-    #     },
-    #     "size": 0
-    # })
-    # return vocab['aggregations']['vocab']['value']
     return VOCAB_SIZE
 
 # returns the total number of documents in the index
@@ -211,7 +179,7 @@ def sort_descending(relevant_docs, k):
 # uses fields specific to ES builtin search
 # the ES builtin search already sorts the hits in decresing order, so there is no need to reorder before saving
 def save_to_file_for_es_builtin(relevant_docs, doc_name):
-    f = '/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data/scores/' + doc_name + '2.txt'
+    f = '/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data/scores/' + doc_name + '7.txt'
 
     if os.path.exists(f):
         os.remove(f)
@@ -228,7 +196,7 @@ def save_to_file_for_es_builtin(relevant_docs, doc_name):
 # saves a list of scored docs to a .txt file
 # @param 2-d dictionary of scored documents [query][documents]
 def save_to_file(relevant_docs, filename):
-    f = '/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data/scores/' + filename + '2.txt'
+    f = '/Users/ellataira/Desktop/is4200/homework-1-ellataira/IR_data/scores/' + filename + '7.txt'
     k = SIZE  # want to save the top 1000 files
 
     if os.path.exists(f):
@@ -469,7 +437,7 @@ def run_all_models():
     save_to_file(okapi_bm25_scores, "okapi_bm25")
     print("saved okapi bm25 scores")
 
-    ## ES builtin:
+    # ES builtin:
     es_builtin_scores = es_search(queries)
 
     save_to_file_for_es_builtin(es_builtin_scores, "es_builtin")
@@ -490,3 +458,5 @@ def run_all_models():
 
 if __name__ == '__main__':
     run_all_models()
+
+

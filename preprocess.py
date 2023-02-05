@@ -152,5 +152,4 @@ def read_stop_words(filename):
 
 
 if __name__ == '__main__':
-    pass
-    # main()
+    main()
