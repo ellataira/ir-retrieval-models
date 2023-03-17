@@ -1,4 +1,4 @@
-Retrieval Models
+# Retrieval Models
 
 The objective of this project is to implement and compare various retrieval systems using vector space models and language models. The two main components are a program to parse the corpus of documents and index it with Elasticsearch and a query processor, which runs queries from an input file using a selected retrieval model.
 
