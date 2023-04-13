@@ -117,8 +117,10 @@ def parse(filepath, id, es, stemmer, stops):
             found_doc = re.search(DOCNO_REGEX, doc)
             docno = re.sub("(<DOCNO> )|( </DOCNO>)", "", found_doc[0])
 
-            found_text = re.search(TEXT_REGEX, doc)
-            text = re.sub("(<TEXT>\n)|(\n</TEXT>)", "", found_text[0])
+            found_text = re.findall(TEXT_REGEX, doc)
+            text = ""
+            for ft in found_text:
+                text += re.sub("(<TEXT>\n)|(\n</TEXT>)", "", ft)
             text = re.sub("\n", " ", text)
 
             tokens = word_tokenize(text)
